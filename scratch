@@ -1,0 +1,171 @@
+
+{"################################################################################"},
+{"#######################      ###################################################"},
+{"#####################    #     #################################################"},
+{"######################  ###        #############################################"},
+{"##################      #####             ######################################"},
+{"################       ########    ###### ######################################"},
+{"###############      #################### ######################################"},
+{"################    ######                  ####################################"},
+{"########   #######  ######   #     #     #  ####################################"},
+{"########   ######      ###                  ####################################"},
+{"########                                    ####################################"},
+{"####       ######      ###   #     #     #  ####################################"},
+{"#### ###   ########## ####                  ####################################"},
+{"#### ###   ##########   ###########=############################################"},
+{"#### ##################   #####          #######################################"},
+{"#### ###             #### #####          #######################################"},
+{"####           #     ####                #######################################"},
+{"########       #     #### #####          #######################################"},
+{"########       #####      ######################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+{"################################################################################"},
+
+
+	TCOD_Error error=TCOD_E_OK;
+
+void render_senario(bool first, Scenario *scenario, TCOD_console_t *console, TCOD_key_t *key,  TCOD_mouse_t *mouse, TCOD_map_t *map, const char smap[SCENARIO_HEIGHT][SCENARIO_WIDTH], Unit *unit) {
+	float dx=0.0f, dy=0.0f, di=0.0f;
+
+	if (first) {
+		/* we draw the foreground only the first time.
+		   during the player movement,  only the @ is redrawn.
+		   the rest impacts only the background color */
+		/* draw the help text & player @ */
+		TCOD_console_clear(*console);
+		TCOD_console_set_default_foreground(*console, TCOD_white);
+		TCOD_console_printf(*console, 1, 0, "IJKL : move around\nT : scenario->torch fx %s\nW : light walls %s\n+-: algo %s",
+			scenario->torch ? "on " : "off",  scenario->light_walls ? "on "  : "off",  algo_names[scenario-algonum]);
+		TCOD_console_set_default_foreground(*console, TCOD_black);
+		TCOD_console_put_char(*console, unit->x, unit->y, '@', TCOD_BKGND_NONE);
+		/* draw windows */
+		for (int y=0; y < SCENARIO_HEIGHT; y++) {
+			for (int x=0; x < SCENARIO_WIDTH; x++) {
+				if (smap[y][x] == '=') {
+					TCOD_console_put_char(*console, x, y, TCOD_CHAR_DHLINE, TCOD_BKGND_NONE);
+				}
+			}
+		}
+	}
+
+	if (scenario->recompute_fov) {
+		scenario->recompute_fov=false;
+		TCOD_map_compute_fov(*map, unit->x, unit->y, scenario->torch ? (int)(TORCH_RADIUS) : 0,  scenario->light_walls,  (TCOD_fov_algorithm_t)scenario-algonum);
+	}
+
+	for (int y=0; y < SCENARIO_HEIGHT; y++) {
+		for (int x=0; x < SCENARIO_WIDTH; x++) {
+			bool visible = TCOD_map_is_in_fov(*map, x, y);
+			bool wall=smap[y][x]=='#';
+			if (! visible) {
+				TCOD_console_set_char_background(*console, x, y,
+					wall ? dark_wall:dark_ground, TCOD_BKGND_SET);
+
+			} else {
+				if (!scenario->torch) {
+					TCOD_console_set_char_background(*console, x, y,
+					 wall ? light_wall : light_ground,  TCOD_BKGND_SET);
+				} else {
+					TCOD_color_t base=(wall ? dark_wall : dark_ground);
+					TCOD_color_t light=(wall ? light_wall : light_ground);
+					float r=(x-unit->x+dx)*(x-unit->x+dx)+(y-unit->y+dy)*(y-unit->y+dy); /* cell distance to scenario->torch (squared) */
+					if (r < SQUARED_TORCH_RADIUS) {
+						float l = (SQUARED_TORCH_RADIUS-r)/SQUARED_TORCH_RADIUS+di;
+						l=CLAMP(0.0f, 1.0f, l);
+						base=TCOD_color_lerp(base, light, l);
+					}
+					TCOD_console_set_char_background(*console, x, y, base, TCOD_BKGND_SET);
+				}
+			}
+		}
+	}
+
+	if (key->vk == TCODK_TEXT && key->text[0] != '\0') {
+		if (key->text[0] == 'K' || key->text[0] == 'k') {
+			if (smap[unit->y - 1][unit->x] == ' ') {
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  ' ',  TCOD_BKGND_NONE);
+				unit->y--;
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  '@',  TCOD_BKGND_NONE);
+				scenario->recompute_fov = true;
+			}
+		}
+		else if (key->text[0] == 'J' || key->text[0] == 'j') {
+			if (smap[unit->y + 1][unit->x] == ' ') {
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  ' ',  TCOD_BKGND_NONE);
+				unit->y++;
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  '@',  TCOD_BKGND_NONE);
+				scenario->recompute_fov = true;
+			}
+		}
+		else if (key->text[0] == 'H' || key->text[0] == 'h') {
+			if (smap[unit->y][unit->x - 1] == ' ') {
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  ' ',  TCOD_BKGND_NONE);
+				unit->x--;
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  '@',  TCOD_BKGND_NONE);
+				scenario->recompute_fov = true;
+			}
+		}
+		else if (key->text[0] == 'L' || key->text[0] == 'l') {
+			if (smap[unit->y][unit->x + 1] == ' ') {
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  ' ',  TCOD_BKGND_NONE);
+				unit->x++;
+				TCOD_console_put_char(*console,  unit->x,  unit->y,  '@',  TCOD_BKGND_NONE);
+				scenario->recompute_fov = true;
+			}
+		}
+		else if (key->text[0] == 'T' || key->text[0] == 't') {
+			scenario->torch = !scenario->torch;
+			TCOD_console_set_default_foreground(*console,  TCOD_white);
+			TCOD_console_printf(*console,  1,  0,  "IJKL : move around\nT : scenario->torch fx %s\nW : light walls %s\n+-: algo %s",
+				scenario->torch ? "on " : "off",  scenario->light_walls ? "on " : "off",  algo_names[scenario-algonum]);
+			TCOD_console_set_default_foreground(*console,  TCOD_black);
+			scenario->recompute_fov = true;
+		}
+		else if (key->text[0] == 'W' || key->text[0] == 'w') {
+			scenario->light_walls = !scenario->light_walls;
+			TCOD_console_set_default_foreground(*console,  TCOD_white);
+			TCOD_console_printf(*console,  1,  0,  "IJKL : move around\nT : scenario->torch fx %s\nW : light walls %s\n+-: algo %s",
+				scenario->torch ? "on " : "off",  scenario->light_walls ? "on " : "off",  algo_names[scenario-algonum]);
+			TCOD_console_set_default_foreground(*console,  TCOD_black);
+			scenario->recompute_fov = true;
+		}
+		else if (key->text[0] == '+' || key->text[0] == '-') {
+			scenario-algonum += key->text[0] == '+' ? 1 : -1;
+			scenario-algonum = CLAMP(0,  NB_FOV_ALGORITHMS - 1,  scenario-algonum);
+			TCOD_console_set_default_foreground(*console,  TCOD_white);
+			TCOD_console_printf(*console,  1,  0,  "IJKL : move around\nT : scenario->torch fx %s\nW : light walls %s\n+-: algo %s",
+				scenario->torch ? "on " : "off",  scenario->light_walls ? "on " : "off",  algo_names[scenario-algonum]);
+			TCOD_console_set_default_foreground(*console,  TCOD_black);
+			scenario->recompute_fov = true;
+		}
+	}
+}
